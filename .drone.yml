@@ -6,8 +6,20 @@ platform:
   arch: amd64
 
 steps:
+- name: Tests
+  image: abcminiuser/docker-ci-python:latest
+  pull: always
+  commands:
+  - python src/test.py
+
 - name: Flake8
   image: abcminiuser/docker-ci-python:latest
   pull: always
   commands:
   - flake8 --ignore E501 src/
+
+- name: Bandit
+  image: abcminiuser/docker-ci-python:latest
+  pull: always
+  commands:
+  - bandit src/

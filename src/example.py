@@ -7,14 +7,14 @@
 #         www.fourwalledcubicle.com
 #
 
-import StreamDeck.StreamDeck as StreamDeck
+import StreamDeck.DeviceManager as StreamDeck
 import threading
 from PIL import Image, ImageDraw, ImageFont
 
 
 # Generates a custom tile with run-time generated text and custom image via the
 # PIL module.
-def render_key_image(width, height, rgb_order, icon_filename, label_text):
+def render_key_image(width, height, rgb_order, icon_filename, label_text, flip, rotation):
     # Create new key image of the correct dimensions, black background
     image = Image.new("RGB", (width, height), 'black')
 
@@ -30,9 +30,20 @@ def render_key_image(width, height, rgb_order, icon_filename, label_text):
     draw = ImageDraw.Draw(image)
     draw.text((10, height - 20), text=label_text, font=font, fill=(255, 255, 255, 128))
 
-    # Get the raw r, g and b components of the generated image (note we need to
-    # flip it horizontally to match the format the StreamDeck expects)
-    r, g, b = image.transpose(Image.FLIP_LEFT_RIGHT).split()
+    # Rotate the image if required for the current StreamDeck
+    if rotation:
+        image = image.rotate(rotation)
+
+    # Flip image horizontally if required for the current StreamDeck
+    if flip[0]:
+        image = image.transpose(Image.FLIP_LEFT_RIGHT)
+
+    # Flip image vertically if required for the current StreamDeck
+    if flip[1]:
+        image = image.transpose(Image.FLIP_TOP_BOTTOM)
+
+    # Get the raw r, g and b components of the generated image
+    r, g, b = image.split()
 
     # Recombine the B, G and R elements in the order the display expects them,
     # and convert the resulting image to a sequence of bytes
@@ -47,8 +58,8 @@ def get_key_style(deck, key, state):
 
     if key == exit_key_index:
         name = "exit"
-        icon = "Assets/Exit.png"
-        text = "Exit"
+        icon = "Assets/{}.png".format("Exit")
+        text = "Bye" if state else "Exit"
     else:
         name = "emoji"
         icon = "Assets/{}.png".format("Pressed" if state else "Released")
@@ -65,12 +76,14 @@ def update_key_image(deck, key, state):
     width = image_format['width']
     height = image_format['height']
     rgb_order = image_format['order']
+    flip = image_format['flip']
+    rotation = image_format['rotation']
 
     # Determine what icon and label to use on the generated key
     style = get_key_style(deck, key, state)
 
     # Generate the custom key with the requested image and label
-    image = render_key_image(width, height, rgb_order, style["icon"], style["label"])
+    image = render_key_image(width, height, rgb_order, style["icon"], style["label"], flip, rotation)
 
     # Update requested key with the generated image
     deck.set_key_image(key, image)
@@ -100,15 +113,33 @@ def key_change_callback(deck, key, state):
 
 if __name__ == "__main__":
     manager = StreamDeck.DeviceManager()
-    decks = manager.enumerate()
+    streamdecks = manager.enumerate()
 
-    print("Found {} Stream Decks.".format(len(decks)), flush=True)
+    print("Found {} Stream Deck(s).\n".format(len(streamdecks)), flush=True)
 
-    for deck in decks:
+    for index, deck in enumerate(streamdecks):
         deck.open()
         deck.reset()
 
+        # Reduce backlight brightness to 30%
         deck.set_brightness(30)
+
+        # Print diagnostic information about each StrewmDeck
+        image_format = deck.key_image_format()
+        flip_description = {
+            (False, False): "Not Mirrored",
+            (True, False): "Mirrored Horizontally",
+            (False, True): "Mirrored Vertically",
+            (True, True): "Mirrored Horizontally/Vertically",
+        }
+        print("Deck {} - {}.".format(index, deck.deck_type()), flush=True)
+        print("\t - ID: {}".format(deck.id()), flush=True)
+        print("\t - Key Count: {}".format(deck.key_count()), flush=True)
+        print("\t - Key Image Format: {}x{} pixels, {} order, {} degrees rotated, {}".format(
+            image_format['width'], image_format['height'],
+            image_format['order'],
+            image_format['rotation'],
+            flip_description[image_format['flip']]), flush=True)
 
         # Set initial key images
         for key in range(deck.key_count()):
