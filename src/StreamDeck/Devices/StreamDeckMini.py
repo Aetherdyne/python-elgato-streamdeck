@@ -30,6 +30,18 @@ class StreamDeckMini(StreamDeck):
     START_PAGE = 0
     REPORT_LENGTH = 1024
 
+    def _read_key_states(self):
+        """
+        Reads the key states of the StreamDeck. This is used internally by
+        :func:`~StreamDeck._read` to talk to the actual device.
+
+        :rtype: list(bool)
+        :return: Button states, with the origin at the top-left of the deck.
+        """
+
+        states = self.device.read(1 + self.KEY_COUNT)[1:]
+        return [bool(s) for s in states]
+
     def reset(self):
         """
         Resets the StreamDeck, clearing all button images and showing the
@@ -42,7 +54,7 @@ class StreamDeckMini(StreamDeck):
 
     def set_brightness(self, percent):
         """
-        Sets the global screen brightness of the ScreenDeck, across all the
+        Sets the global screen brightness of the StreamDeck, across all the
         physical buttons.
 
         :param int/float percent: brightness percent, from [0-100] as an `int`,
@@ -57,6 +69,28 @@ class StreamDeckMini(StreamDeck):
         payload = bytearray(17)
         payload[0:6] = [0x05, 0x55, 0xaa, 0xd1, 0x01, percent]
         self.device.write_feature(payload)
+
+    def get_serial_number(self):
+        """
+        Gets the serial number of the attached StreamDeck.
+
+        :rtype: str
+        :return: String containing the serial number of the attached device.
+        """
+
+        serial = self.device.read_feature(0x03, 17)
+        return "".join(map(chr, serial[5:]))
+
+    def get_firmware_version(self):
+        """
+        Gets the firmware version of the attached StreamDeck.
+
+        :rtype: str
+        :return: String containing the firmware version of the attached device.
+        """
+
+        version = self.device.read_feature(0x04, 17)
+        return "".join(map(chr, version[5:]))
 
     def set_key_image(self, key, image):
         """
